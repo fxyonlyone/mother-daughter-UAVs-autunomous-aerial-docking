@@ -7,7 +7,7 @@ The recovery of micro aerial vehicles (MAVs) is key in mother-daughter robotic c
 
 The above is the summary of the paper, but this program is for one mother-UAV and one daughter-UAV's docking simulation. The  four mother-UAVs and four daughter-UAVs' docking simulation program will be collated and transmitted later.
 
-![2021-07-08 21-44-55 的屏幕截图](/home/fxyttql/Pictures/2021-07-08 21-44-55 的屏幕截图.png)
+![2021-07-08 21-44-55 的屏幕截图](https://user-images.githubusercontent.com/54387244/125066804-02435880-e0e6-11eb-8499-8de69e48a1df.png)
 
 We have tested our system on ROS Melodic and Ubuntu 18.04.
 
@@ -74,8 +74,7 @@ After starting the both_takeoff_dock.launch, the mother-daughter UAVs will fly t
 ## 3. Supplementary notes
 
 1. Because the mother-UAV's model is not built well enough, it will take off and move, but it will be ready in a moment.
-
 2. Parameter log_dir in dUAVDock.h needs to be changed to your corresponding.
 3. Parameter mUAV_moving in mUAVTakeOff.cpp can be "True" or "False" to determine the mother-UAV move or hover.
-
 4. The third generation AprilTag method can directly solve the yaw angle, which is written in track.py, but the angular velocity is not used in the actual tracking.
+5. This is the first time that I upload official code and write comments, so there may be some bugs
