@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<launch>
+    <node pkg="duav_dock" type="track.py" name="track" output="screen">
+    </node>
+    <node pkg="duav_dock" type="keyboard.py" name="keyboard" output="screen">
+    </node>
+    <node pkg="duav_dock" type="dUAVDock" name="duav_dock" output="screen">
+    </node> 
+</launch>

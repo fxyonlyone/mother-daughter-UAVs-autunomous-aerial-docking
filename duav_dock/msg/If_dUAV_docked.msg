@@ -1,0 +1,1 @@
+bool dUAV_docked

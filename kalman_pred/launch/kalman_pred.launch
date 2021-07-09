@@ -1,0 +1,5 @@
+<?xml version="1.0"?>
+
+<launch>
+     <node pkg="kalman_pred" type="kalman_xy_pos" respawn="false" name="kalman_xy_pos" output="screen"></node>
+</launch>

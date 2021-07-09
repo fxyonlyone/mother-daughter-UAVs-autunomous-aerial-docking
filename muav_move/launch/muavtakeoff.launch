@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+
+<launch>
+    <node pkg="muav_move" type="mUAVTakeOff" name="mUAVTakeOff" output="screen">
+    </node> 
+    <node pkg="duav_dock" type="keyboard.py" name="keyboard_muav" output="screen">
+    </node>
+</launch>
