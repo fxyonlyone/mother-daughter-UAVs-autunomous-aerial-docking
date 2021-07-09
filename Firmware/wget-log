@@ -1,0 +1,14 @@
+--2020-04-23 21:18:28--  https://armkeil.blob.core.windows.net/developer/Files/downloads/gnu-rm/7-2017q4/gcc-arm-none-eabi-7-2017-q4-major-linux.tar.bz2
+正在解析主机 armkeil.blob.core.windows.net (armkeil.blob.core.windows.net)... 52.239.137.100
+正在连接 armkeil.blob.core.windows.net (armkeil.blob.core.windows.net)|52.239.137.100|:443... 已连接。
+已发出 HTTP 请求，正在等待回应... 200 OK
+长度： 99857645 (95M) [application/octet-stream]
+正在保存至: “/tmp/gcc-arm-none-eabi-7-2017-q4-major-linux.tar.bz2”
+
+
+
+2020-04-23 21:36:52 (2.48 KB/s) - 在 491015/99857645 字节处发生读取错误 (成功)。 重试中。
+
+--2020-04-23 21:36:53--  (尝试次数： 2)  https://armkeil.blob.core.windows.net/developer/Files/downloads/gnu-rm/7-2017q4/gcc-arm-none-eabi-7-2017-q4-major-linux.tar.bz2
+正在连接 armkeil.blob.core.windows.net (armkeil.blob.core.windows.net)|52.239.137.100|:443... 已连接。
+已发出 HTTP 请求，正在等待回应... 

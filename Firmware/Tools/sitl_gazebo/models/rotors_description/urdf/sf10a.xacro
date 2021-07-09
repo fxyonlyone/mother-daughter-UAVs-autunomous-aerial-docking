@@ -1,0 +1,75 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+<xacro:macro name="sf10a" params="prefix:=sf10a">
+        <link name="${prefix}_link">
+            <inertial>
+                <mass value="0.05" />
+                <origin xyz="0 0 0" />
+                <inertia ixx="2.0833333333333333e-07" ixy="0.0" ixz="0.0"
+                         iyy="5.208333333333334e-07" iyz="0.0"
+                         izz="5.208333333333334e-07" />
+            </inertial>
+
+            <visual>
+                <origin xyz=" 0 0 0 " rpy="0 0 0" />
+		<geometry>
+                    <box size="0.01 0.005 0.005" />
+                </geometry>
+                <material name="Blue"/>
+            </visual>
+
+            <collision>
+                <origin xyz=" 0 0 0 " rpy="0 0 0" />
+                <geometry>
+                    <box size="0.01 0.005 0.005" />
+                </geometry>
+          <surface>
+            <contact>
+              <ode/>
+            </contact>
+            <bounce/>
+            <friction>
+              <ode/>
+            </friction>
+          </surface>
+        </collision>
+        </link>
+    <gazebo reference="${prefix}_link">
+            <sensor type="ray" name="sf10a">
+            <visualize>true</visualize>
+        <always_on>1</always_on>
+        <update_rate>20</update_rate>
+        <pose>0 0 0 0 1.5707963259 0</pose>
+        <ray>
+          <scan>
+            <horizontal>
+              <samples>1</samples>
+              <resolution>1</resolution>
+              <min_angle>-0</min_angle>
+              <max_angle>0</max_angle>
+            </horizontal>
+          </scan>
+          <range>
+            <min>0.06</min> <!-- do not change: use min_distance (below) for realistic behavior (smaller values cause issues) -->
+            <max>35</max>   <!-- do not change: use min_distance (below) for realistic behavior (bigger values cause issues) -->
+            <resolution>0.01</resolution>
+          </range>
+          <noise>
+            <type>gaussian</type>
+            <mean>0.0</mean>
+            <stddev>0.01</stddev>
+          </noise>
+        </ray>
+         
+        <plugin name="LaserPlugin"
+          filename="libgazebo_lidar_plugin.so">
+          <robotNamespace></robotNamespace>
+          <min_distance>0.1</min_distance>
+          <max_distance>25.0</max_distance>
+        </plugin>
+
+      </sensor>
+        </gazebo>
+</xacro:macro>
+</robot>
+

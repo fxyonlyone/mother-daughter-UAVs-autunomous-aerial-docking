@@ -1,0 +1,16 @@
+material Mark/Diffuse
+{
+	receive_shadows off
+	technique
+	{
+		pass
+		{
+			texture_unit
+			{
+				
+				texture ../textures/newmulti.PNG
+			}
+		}
+	}
+}
+

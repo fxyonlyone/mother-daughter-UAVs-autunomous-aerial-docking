@@ -1,0 +1,37 @@
+<sdf version='1.6'>
+  <model name='feiji2'>
+    <link name='base_link'>
+      <pose frame=''>0 0 0 0 -0 0</pose>
+      <inertial>
+        <pose frame=''>0.471432 -3.22338 0.919161 0 -0 0</pose>
+        <mass>3351.06</mass>
+        <inertia>
+          <ixx>10180.8</ixx>
+          <ixy>-0.43718</ixy>
+          <ixz>0.0233472</ixz>
+          <iyy>12621.5</iyy>
+          <iyz>120.771</iyz>
+          <izz>22620.4</izz>
+        </inertia>
+      </inertial>
+      <collision name='base_link_collision'>
+        <pose frame=''>0 0 0 0 -0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://feiji2/meshes/base_link.STL</uri>
+          </mesh>
+        </geometry>
+      </collision>
+      <visual name='base_link_visual'>
+        <pose frame=''>0 0 0 0 -0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://feiji2/meshes/base_link.STL</uri>
+          </mesh>
+        </geometry>
+      </visual>
+    </link>
+  </model>
+</sdf>

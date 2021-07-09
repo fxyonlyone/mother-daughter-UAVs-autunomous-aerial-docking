@@ -1,0 +1,15 @@
+material Mark/Diffuse
+{
+	receive_shadows off
+	technique
+	{
+		pass
+		{
+			texture_unit
+			{
+				
+				texture ../textures/1.png
+			}
+		}
+	}
+}
