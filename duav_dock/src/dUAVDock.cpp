@@ -180,9 +180,9 @@ void Dock::takeOff()
             if(arming_client.call(arm_cmd) && arm_cmd.response.success)
             {
                 ROS_INFO("daughter-UAV Vehicle armed");
-            } 
+            }
             last_request = ros::Time::now();
-        } 
+        }
         else if(ros::Time::now() - last_request > ros::Duration(3.0))
         	break;
         local_pos_pub.publish(pose);
@@ -315,7 +315,7 @@ void Dock::track()
                     }
                     else if (err_z >= 0.25)
                     { // Always check whether the x, y error is too large when fast landing
-                        if (fabs(err_x) >= 0.1 or fabs(err_y) >= 0.1)
+                        if (fabs(err_x) >= 0.15 or fabs(err_y) >= 0.15)
                         {
                             ROS_INFO("land too far,relocalizing");
                             relocalizationManeuver();
@@ -438,7 +438,7 @@ void Dock::track()
                 relocalizationManeuver();
             }
         }
-    }  
+    }
 }
 
 void Dock::relocalizationManeuver()
