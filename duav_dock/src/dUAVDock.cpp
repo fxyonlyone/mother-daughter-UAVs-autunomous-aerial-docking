@@ -262,6 +262,7 @@ void Dock::coordinatetranfer()
         err_y = centroid_y_in_body;
     }
     err_yaw = marker_center.yaw;
+    err_sum_yaw += err_yaw;
     err_sum_x += err_x;
     err_sum_y += err_y;
     err_dx = err_x - last_err_x;
@@ -310,7 +311,7 @@ void Dock::track()
                         vel.twist.linear.x = err_x * Kp_6 + err_sum_x * Ki_6 + err_dx * Kd_6 + current_mUAV_gazebo_state.twist.twist.linear.x; //子机的x,y速度在pid控制器之前加入母鸡的imu数据
                         vel.twist.linear.y = err_y * Kp_6 + err_sum_y * Ki_6 + err_dy * Kd_6 + current_mUAV_gazebo_state.twist.twist.linear.y;
                         vel.twist.linear.z = -0.2 + current_mUAV_gazebo_state.twist.twist.linear.z; //子机的z速度相对于母鸡均是0.3m/s
-                        vel.twist.angular.z = 0;
+                        vel.twist.angular.z = -0.2 * err_yaw + 0.001 * err_sum_yaw;
                         local_vel_pub.publish(vel);
                     }
                     else if (err_z >= 0.25)
@@ -351,6 +352,7 @@ void Dock::track()
                     vel.twist.linear.x = err_x * Kp_6 + err_sum_x * Ki_6 + err_dx * Kd_6 + current_mUAV_gazebo_state.twist.twist.linear.x; //子机的x,y速度在pid控制器之前加入母鸡的imu数据
                     vel.twist.linear.y = err_y * Kp_6 + err_sum_y * Ki_6 + err_dy * Kd_6 + current_mUAV_gazebo_state.twist.twist.linear.y;
                     vel.twist.linear.z = current_mUAV_gazebo_state.twist.twist.linear.z;
+                    vel.twist.angular.z = -0.2 * err_yaw + 0.001 * err_sum_yaw;
                     local_vel_pub.publish(vel);
                 }
             }
@@ -445,7 +447,7 @@ void Dock::relocalizationManeuver()
 {
     ROS_INFO("relocalizating");
     ros::Rate rate(20.0);
-    if (local_position.pose.position.z < current_mUAV_gazebo_state.pose.pose.position.z + 0.3)
+    if (local_position.pose.position.z < current_mUAV_gazebo_state.pose.pose.position.z + 3)
     {
         vel.twist.linear.x = current_mUAV_gazebo_state.twist.twist.linear.x;
         vel.twist.linear.y = current_mUAV_gazebo_state.twist.twist.linear.y;
@@ -456,7 +458,7 @@ void Dock::relocalizationManeuver()
     {
         pose.pose.position.x = current_mUAV_gazebo_state.pose.pose.position.x;
 		pose.pose.position.y = current_mUAV_gazebo_state.pose.pose.position.y;
-		pose.pose.position.z = current_mUAV_gazebo_state.pose.pose.position.z + 0.3;
+		pose.pose.position.z = current_mUAV_gazebo_state.pose.pose.position.z + 3;
 		local_pos_pub.publish(pose);
     }
 

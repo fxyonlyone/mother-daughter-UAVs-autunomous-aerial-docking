@@ -30,18 +30,18 @@ class Track:
                                                     decode_sharpening=0.25,
                                                     debug=0)
         rospy.Subscriber('iris/usb_cam/image_raw', Image, self.callback)
-        self.center_publish = rospy.Publisher('/center', Center, queue_size=1)
+        self.center_publish = rospy.Publisher('/center', Center, queue_size=1)  # 发布矩形中心
 
     def callback(self, image):
         img = np.fromstring(image.data, np.uint8)
         img = img.reshape(480, 640, 3)
-        self.find(img, image.width, image.height)
+        self.find(img, image.width, image.height)  # 寻找中心
 
     def find(self, frame, width, height):
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        tags_48 = self.at_detector_48.detect(gray)  #self.at_detector.detect(gray, estimate_tag_pose=True, camera_params=[554.382713, 554.382713, 320, 240], tag_size=)
-        tags_36 = self.at_detector_36.detect(gray)
+        tags_48 = self.at_detector_48.detect(gray, estimate_tag_pose=True, camera_params=[554.382713, 554.382713, 320, 240], tag_size=0.4104)
+        tags_36 = self.at_detector_36.detect(gray, estimate_tag_pose=True, camera_params=[554.382713, 554.382713, 320, 240], tag_size=0.10944)
         # print("%d apriltags have been detected."%len(tags))
         if tags_48:
             for tag in tags_48:
@@ -49,16 +49,18 @@ class Track:
                 center_x = int(tag.center[0])
                 center_y = int(tag.center[1])
                 centerxy = (center_x, center_y)
+                yaw = math.atan2(tag.pose_R[1, 0], tag.pose_R[0, 0])
                 self.draw(frame, circle_color, center_x, center_y, tag)
-                self.publish(centerxy, width, height)
+                self.publish(centerxy, width, height, yaw)
         elif tags_36:
             for tag in tags_36:
                 circle_color = (0, 255, 0)
                 center_x = int(tag.center[0])
                 center_y = int(tag.center[1])
                 centerxy = (center_x, center_y)
+                yaw = math.atan2(tag.pose_R[1, 0], tag.pose_R[0, 0])
                 self.draw(frame, circle_color, center_x, center_y, tag)
-                self.publish(centerxy, width, height)
+                self.publish(centerxy, width, height, yaw)
         else:
             hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
             lower_red = np.array([0, 100, 100])
@@ -94,6 +96,49 @@ class Track:
         cv2.imshow('w', frame)
         cv2.waitKey(1)
 
+    def compute(self, halflength, tag):
+        cameraParams_Intrinsic = [554.382713, 554.382713, 320, 240]  # camera_fx, camera_fy, camera_cx, camera_cy
+        camera_matrix = np.array(([554.382713, 0, 640],
+                                  [0, 554.382713, 480],
+                                  [0, 0, 1.0]), dtype=np.double)
+        center_x = int(tag.center[0])
+        center_y = int(tag.center[1])
+
+        # PnP解位姿
+        object_3d_points = np.array(
+            ([-halflength, halflength, 0],
+             [halflength, halflength, 0],
+             [halflength, -halflength, 0],
+             [-halflength, -halflength, 0]),
+            dtype=np.double)  # Apriltag coordinates in the World coordinate system
+        object_2d_point = np.array(
+            (tag.corners[0].astype(int),
+             tag.corners[1].astype(int),
+             tag.corners[2].astype(int),
+             tag.corners[3].astype(int)),
+            dtype=np.double)  # Apriltag coordinates in the Image pixel system
+        dist_coefs = np.array([0, 0, 0, 0, 0], dtype=np.double)
+        found, rvec, tvec = cv2.solvePnP(object_3d_points, object_2d_point, camera_matrix, dist_coefs)
+        rotM = cv2.Rodrigues(rvec)[0]
+        camera_postion = -np.matrix(rotM).T * np.matrix(tvec)
+
+        # 求出来相机系到二维码系的欧拉角
+        thetaZ = math.atan2(rotM[1, 0], rotM[0, 0]) * 180.0 / math.pi
+        thetaY = math.atan2(-1.0 * rotM[2, 0], math.sqrt(rotM[2, 1] ** 2 + rotM[2, 2] ** 2)) * 180.0 / math.pi
+        thetaX = math.atan2(rotM[2, 1], rotM[2, 2]) * 180.0 / math.pi
+        # 目前求出的x,y不是很准，先不用，z还算准
+        center_x_pnp = tvec[0]
+        center_y_pnp = tvec[1]
+        center_z_pnp = tvec[2]
+        x_pnp = -1 * center_y_pnp
+        y_pnp = -1 * center_x_pnp
+        z_pnp = 1 * center_z_pnp
+
+        # 乘这个负数，是因为相机系Z轴朝下，机体系Z轴朝上，所以角度正方向相反
+        center_yaw = -1.0 * thetaZ
+        centers = (center_x, center_y, center_yaw)
+        return float(center_z_pnp), centers
+
     def draw(self, frame, circle_color, center_x, center_y, tag):
         cv2.circle(frame, (center_x, center_y), 8, circle_color, -1)  # center
         for idx in range(len(tag.corners)):
@@ -107,16 +152,18 @@ class Track:
         marker_center.height = height
         marker_center.x = centers[0]
         marker_center.y = centers[1]
+        marker_center.yaw = 0
         marker_center.redfind = True
         marker_center.first_find = True
         self.center_publish.publish(marker_center)
 
-    def publish(self, centers, width, height):
+    def publish(self, centers, width, height, yaw):
         marker_center = Center()
         marker_center.width = width
         marker_center.height = height
         marker_center.x = centers[0]
         marker_center.y = centers[1]
+        marker_center.yaw = yaw
         marker_center.apfind = True
         marker_center.first_find = True
         self.center_publish.publish(marker_center)
