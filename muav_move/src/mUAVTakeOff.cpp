@@ -9,11 +9,12 @@
 #include <string>
 #include <std_msgs/String.h>
 
-// if mUAV_moving is true, after keyboard "d" or "D", it will move forward as vel 1m/s
-// if is false, after keyboard "d" or "D", it will hover in x 0, y 0, z 2m.
-bool mUAV_moving = false;
-int track_mode = 0;
+// if mUAV_motion_mode is 0, after keyboard "d" or "D", it will hover in x 0, y 0, z 2m.
+// if is 1, after keyboard "d" or "D", it will move forward as vel 1m/s.
+// if is 2, after keyboard "d" or "D", it will move square as vel 0.5m/s.
+int mUAV_motion_mode = 2;
 
+int track_mode = 0;
 mavros_msgs::State current_state;
 void stateCallback(const mavros_msgs::State::ConstPtr& msg){
     current_state = *msg;
@@ -42,7 +43,7 @@ int main(int argc, char **argv)
     ros::init(argc, argv, "mUAV_takeoff_node");
     ros::NodeHandle nh;
     ROS_INFO("start mother-UAV node");
- 	
+
     ros::Subscriber state_sub = nh.subscribe<mavros_msgs::State>
             ("/mUAV/mavros/state", 10, stateCallback);
     ros::Subscriber position_sub = nh.subscribe<geometry_msgs::PoseStamped>
@@ -66,26 +67,26 @@ int main(int argc, char **argv)
         ros::spinOnce();
         rate.sleep();
     }
- 
+
     geometry_msgs::PoseStamped pose;
     pose.pose.position.x = 0;
     pose.pose.position.y = 0;
     pose.pose.position.z = 2;
-    
+
     geometry_msgs::TwistStamped vel;
- 
+
     for(int i = 100; ros::ok() && i > 0; --i){
         local_pos_pub.publish(pose);
         ros::spinOnce();
         rate.sleep();
     }
- 
+
     mavros_msgs::SetMode offb_set_mode;
     offb_set_mode.request.custom_mode = "OFFBOARD";
- 
+
     mavros_msgs::CommandBool arm_cmd;
     arm_cmd.request.value = true;
- 
+
     ros::Time last_request = ros::Time::now();
     ros::Time last_request1 = ros::Time::now();
 
@@ -116,27 +117,44 @@ int main(int argc, char **argv)
         rate.sleep();
     }
     last_request = ros::Time::now();
-    if (mUAV_moving)
+
+    if (mUAV_motion_mode == 0)
     {
-        while(ros::ok())
-	    {
-		    if(ros::Time::now() - last_request > ros::Duration(2.0))
-		    {
-		        break;
-            }
-            vel.twist.linear.x = 0;
-            vel.twist.linear.y = 0;
-            vel.twist.linear.z = 0;
-            local_vel_pub.publish(vel);
-            ros::spinOnce();
-    	    rate.sleep();
-    	}
         while(ros::ok())
 	    {
 	        if(ifdocked.dUAV_docked)
 		    {
-                ROS_INFO("mother-daughter UAVs already attached");
-			    break;
+		        break;
+            }
+            pose.pose.position.x = 0;
+            pose.pose.position.y = 0;
+            pose.pose.position.z = 2;
+            local_pos_pub.publish(pose);
+            ros::spinOnce();
+    	    rate.sleep();
+    	}
+    }
+
+    else if (mUAV_motion_mode == 1)
+    {
+        while(ros::ok())
+	    {
+	        if(ros::Time::now() - last_request > ros::Duration(3.0))
+		    {
+		        break;
+            }
+            pose.pose.position.x = 0;
+            pose.pose.position.y = 0;
+            pose.pose.position.z = 2;
+            local_pos_pub.publish(pose);
+            ros::spinOnce();
+    	    rate.sleep();
+	    }
+	    while(ros::ok())
+	    {
+	        if(ifdocked.dUAV_docked)
+		    {
+		        break;
             }
             vel.twist.linear.x = 1;
             vel.twist.linear.y = 0;
@@ -144,28 +162,55 @@ int main(int argc, char **argv)
             local_vel_pub.publish(vel);
             ros::spinOnce();
     	    rate.sleep();
-        }
+	    }
     }
-    else
+
+    else if (mUAV_motion_mode == 2)
     {
         while(ros::ok())
 	    {
+            if(ros::Time::now() - last_request < ros::Duration(5.0))
+		    {
+		        vel.twist.linear.x = 0.5;
+                vel.twist.linear.y = 0;
+                vel.twist.linear.z = 0;
+            }
+
+		    else if(ros::Time::now() - last_request < ros::Duration(10.0))
+		    {
+		        vel.twist.linear.x = 0;
+                vel.twist.linear.y = -0.5;
+                vel.twist.linear.z = 0;
+		    }
+
+		    else if(ros::Time::now() - last_request < ros::Duration(15.0))
+		    {
+		        vel.twist.linear.x = -0.5;
+                vel.twist.linear.y = 0;
+                vel.twist.linear.z = 0;
+		    }
+
+		    else if(ros::Time::now() - last_request < ros::Duration(20.0))
+		    {
+		        vel.twist.linear.x = 0;
+                vel.twist.linear.y = 0.5;
+                vel.twist.linear.z = 0;
+		    }
+		    else
+		    {
+		        last_request = ros::Time::now();
+		    }
 		    if(ifdocked.dUAV_docked)
 		    {
                 ROS_INFO("mother-daughter UAVs already attached");
-			    break;
+		        break;
             }
-            else
-            {
-                pose.pose.position.x = 0;
-		        pose.pose.position.y = 0;
-		        pose.pose.position.z = 2;
-		        local_pos_pub.publish(pose);
-            }
-            ros::spinOnce();
+		    local_vel_pub.publish(vel);
+		    ros::spinOnce();
     	    rate.sleep();
-	    }
+    	}
     }
+
 	last_request = ros::Time::now();
     offb_set_mode.request.custom_mode = "AUTO.LAND";
     if( set_mode_client.call(offb_set_mode) && offb_set_mode.response.mode_sent)
