@@ -9,10 +9,10 @@
 #include <string>
 #include <std_msgs/String.h>
 
-// if mUAV_motion_mode is 0, after keyboard "d" or "D", it will hover in x 0, y 0, z 2m.
+// if mUAV_moving_mode is 0, after keyboard "d" or "D", it will hover in x 0, y 0, z 2m.
 // if is 1, after keyboard "d" or "D", it will move forward as vel 1m/s.
 // if is 2, after keyboard "d" or "D", it will move square as vel 0.5m/s.
-int mUAV_motion_mode = 2;
+int mUAV_moving_mode = 2;
 
 int track_mode = 0;
 mavros_msgs::State current_state;
@@ -118,7 +118,7 @@ int main(int argc, char **argv)
     }
     last_request = ros::Time::now();
 
-    if (mUAV_motion_mode == 0)
+    if (mUAV_moving_mode == 0)
     {
         while(ros::ok())
 	    {
@@ -135,7 +135,7 @@ int main(int argc, char **argv)
     	}
     }
 
-    else if (mUAV_motion_mode == 1)
+    else if (mUAV_moving_mode == 1)
     {
         while(ros::ok())
 	    {
@@ -165,8 +165,21 @@ int main(int argc, char **argv)
 	    }
     }
 
-    else if (mUAV_motion_mode == 2)
+    else if (mUAV_moving_mode == 2)
     {
+        while(ros::ok())
+	    {
+	        if(ros::Time::now() - last_request > ros::Duration(2.5))
+		    {
+		        break;
+            }
+            pose.pose.position.x = 0;
+            pose.pose.position.y = 0;
+            pose.pose.position.z = 2;
+            local_pos_pub.publish(pose);
+            ros::spinOnce();
+    	    rate.sleep();
+	    }
         while(ros::ok())
 	    {
             if(ros::Time::now() - last_request < ros::Duration(5.0))
