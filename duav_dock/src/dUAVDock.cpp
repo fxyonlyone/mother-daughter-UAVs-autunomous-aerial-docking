@@ -111,9 +111,13 @@ void Dock::saveStateToCsv()
 void Dock::createFiles()
 {
     //create the errors file and gt position files
-    std::string errors_dir = log_dir + "/errors";
+    time_t timep;
+    time (&timep);
+    char get_time[64];
+    strftime(get_time,sizeof(get_time),"%Y_%m_%d_%H_%M_%s",localtime(&timep));
+    std::string errors_dir = log_dir + get_time + "/errors";
     std::string create_errors_dir = "mkdir -p " + errors_dir;
-    std::string trajectories_dir = log_dir + "/trajectories";
+    std::string trajectories_dir = log_dir + get_time + "/trajectories";
     std::string create_trajectories_dir = "mkdir -p " + trajectories_dir;
     // Create dirs
     const int dir_errors = system(create_errors_dir.c_str());
@@ -288,9 +292,11 @@ void Dock::track()
             if (errorsFile_.is_open())
                 {
                     saveErrorToCsv(ros::Time::now().toSec() - t_ref_,err_x,err_y,-err_z,
-                    marker_kalman_info.x,marker_kalman_info.y,centroid_z_in_body);
+                    current_mUAV_gazebo_state.pose.pose.position.x - current_dUAV_gazebo_state.pose.pose.position.x,
+                    current_mUAV_gazebo_state.pose.pose.position.y - current_dUAV_gazebo_state.pose.pose.position.y,
+                    current_mUAV_gazebo_state.pose.pose.position.z - current_dUAV_gazebo_state.pose.pose.position.z);
                  }
-            if (err_z < 0.25 && fabs(err_x) < 0.1 && fabs(err_y) < 0.1)
+            if (err_z < 0.4 && fabs(err_x) < 0.12 && fabs(err_y) < 0.12)
             {
                 ROS_INFO("AUTO.LAND");
                 break; //PX4 AUTO.LAND
@@ -314,7 +320,7 @@ void Dock::track()
                         vel.twist.angular.z = -0.2 * err_yaw + 0.001 * err_sum_yaw;
                         local_vel_pub.publish(vel);
                     }
-                    else if (err_z >= 0.25)
+                    else if (err_z >= 0.4)
                     { // Always check whether the x, y error is too large when fast landing
                         if (fabs(err_x) >= 0.15 or fabs(err_y) >= 0.15)
                         {
