@@ -40,6 +40,7 @@ public:
     double err_y;
     double err_z;
     double err_yaw;
+    double err_sum_yaw;
     double err_sum_x;
     double err_sum_y;
     double err_dx;
