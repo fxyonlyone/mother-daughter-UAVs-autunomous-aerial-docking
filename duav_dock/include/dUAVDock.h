@@ -24,9 +24,22 @@ private:
 public:
     Dock();
     ros::NodeHandle nh;
+    //  Some settings to be selected
     bool use_prediction = false; // if true, use Kalman filter for predicting future positions of platform
+    bool vel_compensated = true; // if true, the velocity of the mother-UAV will be compensated for the daughter-UAV
     std::string log_dir = "/home/fxyttql/data/log";  //  Log directory
-    double t_ref_;
+
+    //  Some parameters to be selected
+    double initial_relative_height = 2.5;
+    double slow_landing_vel = -0.25;
+    double slow_landing_xy_error_threshold = 0.2;
+    double fast_landing_xy_error_threshold = 0.15;
+    double fast_landing_z_error_condition = 0.8;
+    double fast_landing_vel = -0.3;;
+    double auto_land_xy_error_threshold = 0.12;
+    double auto_land_z_error_condition = 0.4;
+    double relocalization_z_vel = 0.3;
+
     //  Error value in camera coordinate system
     double centroid_x_in_cam;
     double centroid_y_in_cam;
@@ -76,8 +89,10 @@ public:
     double Kp_0 = 1.0;
     double Ki_0 = 0.0015;
     double Kd_0 = 0.3;//1.8
-    double Kp_yaw;
+    double Kp_yaw = -0.25;
+    double Ki_yaw = -0.001;
     //  Some other parameters
+    double t_ref_;
     int track_mode = 0;
     int land_first = 0;
     int land_second = 0;
@@ -140,8 +155,9 @@ public:
     void coordinatetranfer();
     void relocalizationManeuver();
     void saveErrorToCsv(const double t,
-                        const double ex_real, const double ey_real, const double ez_real,
-                        const double ex_target, const double ey_target, const double ez_target);
+                              const double ex_visual, const double ey_visual, const double ez_visual,
+                              const double ex_real, const double ey_real, const double ez_real,
+                              const double ex_target, const double ey_target, const double ez_target);
     void saveStateToCsv();
     void joyCallback( const std_msgs::String::ConstPtr &str);
 };

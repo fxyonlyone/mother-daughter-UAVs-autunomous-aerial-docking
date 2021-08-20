@@ -92,6 +92,7 @@ void Dock::dUAVImuCallback(const sensor_msgs::Imu::ConstPtr &msg)
 }
 
 void Dock::saveErrorToCsv(const double t,
+                          const double ex_visual, const double ey_visual, const double ez_visual,
                           const double ex_real, const double ey_real, const double ez_real,
                           const double ex_target, const double ey_target, const double ez_target)
 {
@@ -129,13 +130,34 @@ void Dock::createFiles()
     }
     // Build file's names depending on type of approach
     std::string type;
-    type = "pred";
+    if (use_prediction)
+    {
+        if (vel_compensated)
+        {
+            type = "pred_compensated";
+        }
+        else
+        {
+            type = "pred_no_compensated";
+        }
+    }
+    else
+    {
+        if (vel_compensated)
+        {
+            type = "no_pred_compensated";
+        }
+        else
+        {
+            type = "no_pred_no_compensated";
+        }
+    }
     std::ostringstream oss;
     oss << errors_dir << "/errors_" << type << ".csv";
     if (!errorsFile_.is_open())
     {
         errorsFile_.open(oss.str());
-        errorsFile_ << "t,ex_real,ey_real,ez_real,ex_target,ey_target,ez_target\n";
+        errorsFile_ << "t,ex_visual,ey_visual,ez_visual,ex_real,ey_real,ez_real,ex_target,ey_target,ez_target\n";
     }
     oss.str("");
     oss.clear();
@@ -159,7 +181,7 @@ void Dock::takeOff()
     }
     pose.pose.position.x = 0;
     pose.pose.position.y = 0;
-    pose.pose.position.z = current_mUAV_gazebo_state.pose.pose.position.z + 3;
+    pose.pose.position.z = current_mUAV_gazebo_state.pose.pose.position.z + 2.5;
     for (int i = 100; ros::ok() && i > 0; --i)
     {
         local_pos_pub.publish(pose);
@@ -206,13 +228,13 @@ void Dock::takeOff()
         { // Now the mUAV model is not well established, so when 'D' or 'd' is pressed, the dUAV begins to approach
             pose.pose.position.x = current_mUAV_gazebo_state.pose.pose.position.x;
             pose.pose.position.y = current_mUAV_gazebo_state.pose.pose.position.y;
-            pose.pose.position.z = current_mUAV_gazebo_state.pose.pose.position.z + 3;
+            pose.pose.position.z = current_mUAV_gazebo_state.pose.pose.position.z + initial_relative_height;
         }
         else
         {
             pose.pose.position.x = 0;
             pose.pose.position.y = 0;
-            pose.pose.position.z = current_mUAV_gazebo_state.pose.pose.position.z + 3;
+            pose.pose.position.z = current_mUAV_gazebo_state.pose.pose.position.z + initial_relative_height;
         }
         local_pos_pub.publish(pose);
         saveStateToCsv();
@@ -294,9 +316,10 @@ void Dock::track()
                     saveErrorToCsv(ros::Time::now().toSec() - t_ref_,err_x,err_y,-err_z,
                     current_mUAV_gazebo_state.pose.pose.position.x - current_dUAV_gazebo_state.pose.pose.position.x,
                     current_mUAV_gazebo_state.pose.pose.position.y - current_dUAV_gazebo_state.pose.pose.position.y,
-                    current_mUAV_gazebo_state.pose.pose.position.z - current_dUAV_gazebo_state.pose.pose.position.z);
+                    current_mUAV_gazebo_state.pose.pose.position.z - current_dUAV_gazebo_state.pose.pose.position.z,
+                    marker_kalman_info.x,marker_kalman_info.y,centroid_z_in_body);
                  }
-            if (err_z < 0.4 && fabs(err_x) < 0.12 && fabs(err_y) < 0.12)
+            if (err_z <= auto_land_z_error_condition && fabs(err_x) < auto_land_xy_error_threshold && fabs(err_y) < auto_land_xy_error_threshold)
             {
                 ROS_INFO("AUTO.LAND");
                 break; //PX4 AUTO.LAND
@@ -304,40 +327,58 @@ void Dock::track()
             if (marker_center.apfind)
             {
                 ROS_INFO("I's apfind");
-                if (fabs(err_x) < 0.2 && fabs(err_y) < 0.2)
+                if (fabs(err_x) < slow_landing_xy_error_threshold && fabs(err_y) < slow_landing_xy_error_threshold)
                 { // Only when the errorxy is less than a certain threshold, it will decrease
                     if (land_first == 0)
                     { // Save the data from the first landing
-                        saveErrorToCsv(ros::Time::now().toSec() - t_ref_,0,0,0,0,0,0);
+                        saveErrorToCsv(ros::Time::now().toSec() - t_ref_,0,0,0,0,0,0,0,0,0);
                         land_first = 1;
                     }
-                    if (err_z >= 0.8)
+                    if (err_z >= fast_landing_z_error_condition)
                     {
-                        ROS_INFO("I's time to  slow land");                               //60,2
-                        vel.twist.linear.x = err_x * Kp_6 + err_sum_x * Ki_6 + err_dx * Kd_6 + current_mUAV_gazebo_state.twist.twist.linear.x; //子机的x,y速度在pid控制器之前加入母鸡的imu数据
-                        vel.twist.linear.y = err_y * Kp_6 + err_sum_y * Ki_6 + err_dy * Kd_6 + current_mUAV_gazebo_state.twist.twist.linear.y;
-                        vel.twist.linear.z = -0.2 + current_mUAV_gazebo_state.twist.twist.linear.z; //子机的z速度相对于母鸡均是0.3m/s
-                        vel.twist.angular.z = -0.2 * err_yaw + 0.001 * err_sum_yaw;
+                        ROS_INFO("I's time to  slow land");
+                        if (vel_compensated)
+                        {
+                            vel.twist.linear.x = err_x * Kp_6 + err_sum_x * Ki_6 + err_dx * Kd_6 + current_mUAV_gazebo_state.twist.twist.linear.x;
+                            vel.twist.linear.y = err_y * Kp_6 + err_sum_y * Ki_6 + err_dy * Kd_6 + current_mUAV_gazebo_state.twist.twist.linear.y;
+                            vel.twist.linear.z = slow_landing_vel + current_mUAV_gazebo_state.twist.twist.linear.z;
+                        }
+                        else
+                        {
+                            vel.twist.linear.x = err_x * Kp_6 + err_sum_x * Ki_6 + err_dx * Kd_6;
+                            vel.twist.linear.y = err_y * Kp_6 + err_sum_y * Ki_6 + err_dy * Kd_6;
+                            vel.twist.linear.z = slow_landing_vel;
+                        }
+                        vel.twist.angular.z = Kp_yaw * err_yaw + Ki_yaw * err_sum_yaw;
                         local_vel_pub.publish(vel);
                     }
-                    else if (err_z >= 0.4)
+                    else if (err_z >= auto_land_z_error_condition)
                     { // Always check whether the x, y error is too large when fast landing
-                        if (fabs(err_x) >= 0.15 or fabs(err_y) >= 0.15)
+                        if (fabs(err_x) >= fast_landing_xy_error_threshold or fabs(err_y) >= fast_landing_xy_error_threshold)
                         {
                             ROS_INFO("land too far,relocalizing");
                             relocalizationManeuver();
                         }
                         else
                         {
+                            ROS_INFO("I's time to fast land");
                             if (land_second == 0)
                             { // Save the data from the first fast landing
-                                saveErrorToCsv(ros::Time::now().toSec() - t_ref_,0,0,0,0,0,0);
+                                saveErrorToCsv(ros::Time::now().toSec() - t_ref_,0,0,0,0,0,0,0,0,0);
                                 land_second = 1;
                             }
-                            ROS_INFO("I's time to fast land");
-                            vel.twist.linear.x = err_x * Kp_0 + err_sum_x * Ki_0 + err_dx * Kd_0 + current_mUAV_gazebo_state.twist.twist.linear.x;
-                            vel.twist.linear.y = err_y * Kp_0 + err_sum_y * Ki_0 + err_dy * Kd_0 + current_mUAV_gazebo_state.twist.twist.linear.y;
-                            vel.twist.linear.z = -0.25 + current_mUAV_gazebo_state.twist.twist.linear.z;
+                            if (vel_compensated)
+                            {
+                                vel.twist.linear.x = err_x * Kp_0 + err_sum_x * Ki_0 + err_dx * Kd_0 + current_mUAV_gazebo_state.twist.twist.linear.x;
+                                vel.twist.linear.y = err_y * Kp_0 + err_sum_y * Ki_0 + err_dy * Kd_0 + current_mUAV_gazebo_state.twist.twist.linear.y;
+                                vel.twist.linear.z = fast_landing_vel + current_mUAV_gazebo_state.twist.twist.linear.z;
+                            }
+                            else
+                            {
+                                vel.twist.linear.x = err_x * Kp_0 + err_sum_x * Ki_0 + err_dx * Kd_0;
+                                vel.twist.linear.y = err_y * Kp_0 + err_sum_y * Ki_0 + err_dy * Kd_0;
+                                vel.twist.linear.z = fast_landing_vel;
+                            }
                             vel.twist.angular.z = 0;
                             local_vel_pub.publish(vel);
                         }
@@ -345,9 +386,18 @@ void Dock::track()
                     else
                     {  // If err_x, err_y is too large when err_z satisfied, tracking
                         ROS_INFO("err_z too close,track");
-                        vel.twist.linear.x = err_x * Kp_0 + err_sum_x * Ki_0 + err_dx * Kd_0 + current_mUAV_gazebo_state.twist.twist.linear.x;
-                        vel.twist.linear.y = err_y * Kp_0 + err_sum_y * Ki_0 + err_dy * Kd_0 + current_mUAV_gazebo_state.twist.twist.linear.y;
-                        vel.twist.linear.z = current_mUAV_gazebo_state.twist.twist.linear.z;
+                        if (vel_compensated)
+                        {
+                            vel.twist.linear.x = err_x * Kp_0 + err_sum_x * Ki_0 + err_dx * Kd_0 + current_mUAV_gazebo_state.twist.twist.linear.x;
+                            vel.twist.linear.y = err_y * Kp_0 + err_sum_y * Ki_0 + err_dy * Kd_0 + current_mUAV_gazebo_state.twist.twist.linear.y;
+                            vel.twist.linear.z = current_mUAV_gazebo_state.twist.twist.linear.z;
+                        }
+                        else
+                        {
+                            vel.twist.linear.x = err_x * Kp_0 + err_sum_x * Ki_0 + err_dx * Kd_0;
+                            vel.twist.linear.y = err_y * Kp_0 + err_sum_y * Ki_0 + err_dy * Kd_0;
+                            vel.twist.linear.z = 0;
+                        }
                         vel.twist.angular.z = 0;
                         local_vel_pub.publish(vel);
                     }
@@ -355,19 +405,37 @@ void Dock::track()
                 else
                 {
                     ROS_INFO("I's time to track");
-                    vel.twist.linear.x = err_x * Kp_6 + err_sum_x * Ki_6 + err_dx * Kd_6 + current_mUAV_gazebo_state.twist.twist.linear.x; //子机的x,y速度在pid控制器之前加入母鸡的imu数据
-                    vel.twist.linear.y = err_y * Kp_6 + err_sum_y * Ki_6 + err_dy * Kd_6 + current_mUAV_gazebo_state.twist.twist.linear.y;
-                    vel.twist.linear.z = current_mUAV_gazebo_state.twist.twist.linear.z;
-                    vel.twist.angular.z = -0.2 * err_yaw + 0.001 * err_sum_yaw;
+                    if (vel_compensated)
+                    {
+                        vel.twist.linear.x = err_x * Kp_6 + err_sum_x * Ki_6 + err_dx * Kd_6 + current_mUAV_gazebo_state.twist.twist.linear.x;
+                        vel.twist.linear.y = err_y * Kp_6 + err_sum_y * Ki_6 + err_dy * Kd_6 + current_mUAV_gazebo_state.twist.twist.linear.y;
+                        vel.twist.linear.z = current_mUAV_gazebo_state.twist.twist.linear.z;
+                    }
+                    else
+                    {
+                        vel.twist.linear.x = err_x * Kp_6 + err_sum_x * Ki_6 + err_dx * Kd_6;
+                        vel.twist.linear.y = err_y * Kp_6 + err_sum_y * Ki_6 + err_dy * Kd_6;
+                        vel.twist.linear.z = 0;
+                    }
+                    vel.twist.angular.z = Kp_yaw * err_yaw + Ki_yaw * err_sum_yaw;
                     local_vel_pub.publish(vel);
                 }
             }
             else if (marker_center.redfind)
             { //The red information is only used as the basis of tracking, and does not decrease
                 ROS_INFO("I's redfind");
-                vel.twist.linear.x = err_red_x * Kp_red + err_red_sum_x * Ki_red + current_mUAV_gazebo_state.twist.twist.linear.x; //子机的x,y速度在pid控制器之前加入母鸡的imu数据
-                vel.twist.linear.y = err_red_x * Kp_red + err_red_sum_y * Ki_red + current_mUAV_gazebo_state.twist.twist.linear.y;
-                vel.twist.linear.z = current_mUAV_gazebo_state.twist.twist.linear.z;
+                if (vel_compensated)
+                {
+                    vel.twist.linear.x = err_red_x * Kp_red + err_red_sum_x * Ki_red + current_mUAV_gazebo_state.twist.twist.linear.x;
+                    vel.twist.linear.y = err_red_x * Kp_red + err_red_sum_y * Ki_red + current_mUAV_gazebo_state.twist.twist.linear.y;
+                    vel.twist.linear.z = current_mUAV_gazebo_state.twist.twist.linear.z;
+                }
+                else
+                {
+                    vel.twist.linear.x = err_red_x * Kp_red + err_red_sum_x * Ki_red;
+                    vel.twist.linear.y = err_red_x * Kp_red + err_red_sum_y * Ki_red;
+                    vel.twist.linear.z = 0;
+                }
                 local_vel_pub.publish(vel);
             }
             last_err_x = err_x;
@@ -417,7 +485,7 @@ void Dock::track()
                         err_sum_y += err_y;
                         err_dx = err_x - last_err_x;
                         err_dy = err_y - last_err_y;
-                        vel.twist.linear.x = err_x * Kp_6 + err_sum_x * Ki_6 + err_dx * Kd_6 + current_mUAV_gazebo_state.twist.twist.linear.x; //子机的x,y速度在pid控制器之前加入母鸡的imu数据
+                        vel.twist.linear.x = err_x * Kp_6 + err_sum_x * Ki_6 + err_dx * Kd_6 + current_mUAV_gazebo_state.twist.twist.linear.x;
                         vel.twist.linear.y = err_y * Kp_6 + err_sum_y * Ki_6 + err_dy * Kd_6 + current_mUAV_gazebo_state.twist.twist.linear.y;
                         if(err_z > 1.0)
                         {
@@ -453,21 +521,29 @@ void Dock::relocalizationManeuver()
 {
     ROS_INFO("relocalizating");
     ros::Rate rate(20.0);
-    if (local_position.pose.position.z < current_mUAV_gazebo_state.pose.pose.position.z + 3)
+    if (local_position.pose.position.z < current_mUAV_gazebo_state.pose.pose.position.z + initial_relative_height)
     {
-        vel.twist.linear.x = current_mUAV_gazebo_state.twist.twist.linear.x;
-        vel.twist.linear.y = current_mUAV_gazebo_state.twist.twist.linear.y;
-        vel.twist.linear.z = 0.3 + current_mUAV_gazebo_state.twist.twist.linear.z;
+        if (vel_compensated)
+        {
+            vel.twist.linear.x = current_mUAV_gazebo_state.twist.twist.linear.x;
+            vel.twist.linear.y = current_mUAV_gazebo_state.twist.twist.linear.y;
+            vel.twist.linear.z = relocalization_z_vel + current_mUAV_gazebo_state.twist.twist.linear.z;
+        }
+        else
+        {
+            vel.twist.linear.x = 0;
+            vel.twist.linear.y = 0;
+            vel.twist.linear.z = relocalization_z_vel;
+        }
         local_vel_pub.publish(vel);
     }
     else
     {
         pose.pose.position.x = current_mUAV_gazebo_state.pose.pose.position.x;
 		pose.pose.position.y = current_mUAV_gazebo_state.pose.pose.position.y;
-		pose.pose.position.z = current_mUAV_gazebo_state.pose.pose.position.z + 3;
+		pose.pose.position.z = current_mUAV_gazebo_state.pose.pose.position.z + initial_relative_height;
 		local_pos_pub.publish(pose);
     }
-
     marker_info.reset = true;
     marker_info.pred = false;
     dUAV_pos_pub.publish(marker_info);
