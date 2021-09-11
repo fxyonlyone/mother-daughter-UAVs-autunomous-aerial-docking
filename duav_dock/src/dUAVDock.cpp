@@ -14,6 +14,7 @@
 #include <std_msgs/String.h>
 #include <sensor_msgs/Imu.h>
 #include <duav_dock/Center.h>
+#include <duav_dock/Track_state.h>
 #include <duav_dock/If_dUAV_docked.h>
 #include <duav_dock/Marker_find_info.h>
 #include <duav_dock/Kalman_info.h>
@@ -34,6 +35,7 @@ Dock::Dock()
 
     local_pos_pub = nh.advertise<geometry_msgs::PoseStamped>("iris/mavros/setpoint_position/local", 10);
     local_vel_pub = nh.advertise<geometry_msgs::TwistStamped>("iris/mavros/setpoint_velocity/cmd_vel", 10);
+    track_state_pub = nh.advertise<duav_dock::Track_state>("track_state", 10);
     ifdocked_pub = nh.advertise<duav_dock::If_dUAV_docked>("ifdocked", 10);
     dUAV_pos_pub = nh.advertise<duav_dock::Marker_find_info>("/dUAV_dock/pos_xy", 1);
 
@@ -206,9 +208,9 @@ void Dock::takeOff()
             if(arming_client.call(arm_cmd) && arm_cmd.response.success)
             {
                 ROS_INFO("daughter-UAV Vehicle armed");
-            }
+            } 
             last_request = ros::Time::now();
-        }
+        } 
         else if(ros::Time::now() - last_request > ros::Duration(3.0))
         	break;
         local_pos_pub.publish(pose);
@@ -322,6 +324,8 @@ void Dock::track()
             if (err_z <= auto_land_z_error_condition && fabs(err_x) < auto_land_xy_error_threshold && fabs(err_y) < auto_land_xy_error_threshold)
             {
                 ROS_INFO("AUTO.LAND");
+                state.x = 5;
+                track_state_pub.publish(state);
                 break; //PX4 AUTO.LAND
             }
             if (marker_center.apfind)
@@ -337,6 +341,8 @@ void Dock::track()
                     if (err_z >= fast_landing_z_error_condition)
                     {
                         ROS_INFO("I's time to  slow land");
+                        state.x = 2;
+                        track_state_pub.publish(state);
                         if (vel_compensated)
                         {
                             vel.twist.linear.x = err_x * Kp_6 + err_sum_x * Ki_6 + err_dx * Kd_6 + current_mUAV_gazebo_state.twist.twist.linear.x;
@@ -362,6 +368,8 @@ void Dock::track()
                         else
                         {
                             ROS_INFO("I's time to fast land");
+                            state.x = 3;
+                            track_state_pub.publish(state);
                             if (land_second == 0)
                             { // Save the data from the first fast landing
                                 saveErrorToCsv(ros::Time::now().toSec() - t_ref_,0,0,0,0,0,0,0,0,0);
@@ -405,6 +413,8 @@ void Dock::track()
                 else
                 {
                     ROS_INFO("I's time to track");
+                    state.x = 1;
+                    track_state_pub.publish(state);
                     if (vel_compensated)
                     {
                         vel.twist.linear.x = err_x * Kp_6 + err_sum_x * Ki_6 + err_dx * Kd_6 + current_mUAV_gazebo_state.twist.twist.linear.x;
@@ -424,6 +434,8 @@ void Dock::track()
             else if (marker_center.redfind)
             { //The red information is only used as the basis of tracking, and does not decrease
                 ROS_INFO("I's redfind");
+                state.x = 1;
+                track_state_pub.publish(state);
                 if (vel_compensated)
                 {
                     vel.twist.linear.x = err_red_x * Kp_red + err_red_sum_x * Ki_red + current_mUAV_gazebo_state.twist.twist.linear.x;
@@ -514,12 +526,14 @@ void Dock::track()
                 relocalizationManeuver();
             }
         }
-    }
+    }  
 }
 
 void Dock::relocalizationManeuver()
 {
     ROS_INFO("relocalizating");
+    state.x = 4;
+    track_state_pub.publish(state);
     ros::Rate rate(20.0);
     if (local_position.pose.position.z < current_mUAV_gazebo_state.pose.pose.position.z + initial_relative_height)
     {

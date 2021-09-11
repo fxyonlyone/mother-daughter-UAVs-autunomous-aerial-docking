@@ -108,6 +108,7 @@ public:
     geometry_msgs::PoseStamped pose; // daughter-UAV's command local position
     geometry_msgs::TwistStamped vel; // daughter-UAV's command local vel
     duav_dock::Center marker_center; // marker information
+    duav_dock::Track_state state; // Track_state information
     duav_dock::If_dUAV_docked ifdocked; // check if daughter-UAV is docked
     duav_dock::Marker_find_info marker_info; // marker_info to kalman filter
     duav_dock::Kalman_info marker_kalman_info; // marker_info from kalman filter
@@ -132,6 +133,7 @@ public:
     ros::Publisher dUAV_pos_pub;
     ros::Publisher ifdocked_pub;
     ros::Publisher center_pub;
+    ros::Publisher track_state_pub;
     ros::Publisher local_pos_pub;
     ros::Publisher local_vel_pub;
     ros::Publisher global_pos_pub;

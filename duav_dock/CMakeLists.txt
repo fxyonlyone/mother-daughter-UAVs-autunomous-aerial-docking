@@ -11,7 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
   
 )
 add_message_files(FILES 
-Center.msg If_dUAV_docked.msg Marker_find_info.msg Kalman_info.msg)
+Center.msg If_dUAV_docked.msg Marker_find_info.msg Kalman_info.msg Track_state.msg)
 generate_messages(DEPENDENCIES std_msgs)
 
 catkin_package(

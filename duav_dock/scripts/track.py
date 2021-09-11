@@ -1,27 +1,25 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import rospy
-from std_msgs.msg import Header
 from sensor_msgs.msg import Image
-from dUAV_dock.msg import Center  # 自定义消息类型
-import os
+from duav_dock.msg import Center  # 自定义消息类型
+from duav_dock.msg import Track_state  # 自定义消息类型
 import cv2
 import numpy as np
-import time
 import dt_apriltags
 import math
 
 
 class Track:
 
-    def __init__(self):
+    def __init__(self, state):
         self.at_detector_48 = dt_apriltags.Detector(families='tagCustom48h12',
-                                            nthreads=4,
-                                            quad_decimate=2,
-                                            quad_sigma=0.0,
-                                            refine_edges=1,
-                                            decode_sharpening=0.25,
-                                            debug=0)
+                                                    nthreads=4,
+                                                    quad_decimate=2,
+                                                    quad_sigma=0.0,
+                                                    refine_edges=1,
+                                                    decode_sharpening=0.25,
+                                                    debug=0)
         self.at_detector_36 = dt_apriltags.Detector(families='tag36h11',
                                                     nthreads=4,
                                                     quad_decimate=2,
@@ -29,8 +27,14 @@ class Track:
                                                     refine_edges=1,
                                                     decode_sharpening=0.25,
                                                     debug=0)
+        self.state = state
         rospy.Subscriber('iris/usb_cam/image_raw', Image, self.callback)
-        self.center_publish = rospy.Publisher('/center', Center, queue_size=1)  # 发布矩形中心
+        rospy.Subscriber('track_state', Track_state, self.track_callback)
+        self.center_publish = rospy.Publisher('/center', Center, queue_size=10)
+
+    def track_callback(self, msg):
+        state = msg.x
+        self.state = state
 
     def callback(self, image):
         img = np.fromstring(image.data, np.uint8)
@@ -40,8 +44,10 @@ class Track:
     def find(self, frame, width, height):
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        tags_48 = self.at_detector_48.detect(gray, estimate_tag_pose=True, camera_params=[554.382713, 554.382713, 320, 240], tag_size=0.4104)
-        tags_36 = self.at_detector_36.detect(gray, estimate_tag_pose=True, camera_params=[554.382713, 554.382713, 320, 240], tag_size=0.10944)
+        tags_48 = self.at_detector_48.detect(gray, estimate_tag_pose=True,
+                                             camera_params=[554.382713, 554.382713, 320, 240], tag_size=0.4104)
+        tags_36 = self.at_detector_36.detect(gray, estimate_tag_pose=True,
+                                             camera_params=[554.382713, 554.382713, 320, 240], tag_size=0.10944)
         # print("%d apriltags have been detected."%len(tags))
         if tags_48:
             for tag in tags_48:
@@ -51,6 +57,8 @@ class Track:
                 centerxy = (center_x, center_y)
                 yaw = math.atan2(tag.pose_R[1, 0], tag.pose_R[0, 0])
                 self.draw(frame, circle_color, center_x, center_y, tag)
+                text = '[Detection Information] [AprilTag 48]'
+                cv2.putText(frame, text, (5, 430), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
                 self.publish(centerxy, width, height, yaw)
         elif tags_36:
             for tag in tags_36:
@@ -60,6 +68,8 @@ class Track:
                 centerxy = (center_x, center_y)
                 yaw = math.atan2(tag.pose_R[1, 0], tag.pose_R[0, 0])
                 self.draw(frame, circle_color, center_x, center_y, tag)
+                text = '[Detection Information] [AprilTag 36]'
+                cv2.putText(frame, text, (5, 430), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
                 self.publish(centerxy, width, height, yaw)
         else:
             hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
@@ -82,10 +92,12 @@ class Track:
                         maxArea = area
                         maxIndex = i
                 x, y, w, h = cv2.boundingRect(contours[maxIndex])  # 外接四边形
-                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
+                cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
                 center_x = int(x + w / 2)
                 center_y = int(y + h / 2)
-                cv2.circle(frame, (center_x, center_y), 8, (0, 255, 0), -1)  # center
+                cv2.circle(frame, (center_x, center_y), 8, (255, 0, 0), -1)  # center
+                text = '[Detection Information] [Red Information]'
+                cv2.putText(frame, text, (5, 430), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
                 centerxy = (center_x, center_y)
                 self.red_publish(centerxy, width, height)
             else:
@@ -93,6 +105,21 @@ class Track:
                 marker_center.redfind = False
                 marker_center.apfind = False
                 self.center_publish.publish(marker_center)
+                text = '[Detection Information] [NAN]'
+                cv2.putText(frame, text, (5, 430), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+        if self.state == 0:
+            textTracking = '[Tracking Information] [Take-OFF]'
+        elif self.state == 1:
+            textTracking = '[Tracking Information] [Tracing]'
+        elif self.state == 2:
+            textTracking = '[Tracking Information] [Slow-Landing]'
+        elif self.state == 3:
+            textTracking = '[Tracking Information] [Fast-Landing]'
+        elif self.state == 4:
+            textTracking = '[Tracking Information] [Relocalizating]'
+        elif self.state == 5:
+            textTracking = '[Tracking Information] [AUTO LAND]'
+        cv2.putText(frame, textTracking, (5, 460), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
         cv2.imshow('w', frame)
         cv2.waitKey(1)
 
@@ -129,5 +156,5 @@ class Track:
 if __name__ == '__main__':
     rospy.init_node('track', anonymous=True)
     print("Tracking start")
-    track = Track()
+    track = Track(0)
     rospy.spin()
